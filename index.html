@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Veterinary Anesthesia Monitor Simulator for training">
+  <meta name="theme-color" content="#3B82F6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <title>Vet Anesthesia Monitor</title>
+  <script src="https://cdn.counter.dev/script.js" data-id="ehab.misk" data-utcoffset="-4"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    const { useState, useEffect, useRef } = React;
+    const { AlertCircle, Play, Pause, RotateCcw } = lucide;
+
+    const VetAnesthesiaMonitor = () => {
+      // Register service worker for PWA
+      useEffect(() => {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('/sw.js').catch(() => {
+            console.log('Service worker registration failed');
+          });
+        }
+      }, []);
+
+      const [time, setTime] = useState(new Date());
+      const [isRunning, setIsRunning] = useState(true);
+      const [score, setScore] = useState(0);
+      const [missedAlerts, setMissedAlerts] = useState(0);
+
+      const [hr, setHr] = useState(95);
+      const [spo2, setSpo2] = useState(98);
+      const [etco2, setEtco2] = useState(38);
+      const [bpSys, setBpSys] = useState(120);
+      const [bpDia, setBpDia] = useState(75);
+      const [bpMean, setBpMean] = useState(90);
+      const [temp, setTemp] = useState(37.8);
+      const [rr, setRr] = useState(14);
+
+      const [activeAlert, setActiveAlert] = useState(null);
+      const [alertStartTime, setAlertStartTime] = useState(null);
+      const [showFeedback, setShowFeedback] = useState(null);
+
+      const [lastBpUpdate, setLastBpUpdate] = useState(Date.now());
+      const [lastHrUpdate, setLastHrUpdate] = useState(Date.now());
+      const [lastSpo2Update, setLastSpo2Update] = useState(Date.now());
+      const [lastEtco2Update, setLastEtco2Update] = useState(Date.now());
+      const [lastTempUpdate, setLastTempUpdate] = useState(Date.now());
+      const [lastRrUpdate, setLastRrUpdate] = useState(Date.now());
+
+      const canvasRef = useRef(null);
+
+      const normalRanges = {
+        hr: { min: 80, max: 140, low: 60 },
+        spo2: { min: 95, max: 100, low: 90 },
+        etco2: { min: 35, max: 45, low: 28 },
+        bpSys: { min: 100, max: 160, low: 80 },
+        temp: { min: 37.0, max: 39.0, low: 36.0 }
+      };
+
+      useEffect(() => {
+        if (!isRunning) return;
+
+        const alertInterval = setInterval(() => {
+          if (!activeAlert) {
+            const alerts = ['lowHR', 'lowBP', 'lowEtCO2', 'lowSpO2', 'lowTemp'];
+            const randomAlert = alerts[Math.floor(Math.random() * alerts.length)];
+            setActiveAlert(randomAlert);
+            setAlertStartTime(Date.now());
+          }
+        }, 30000 + Math.random() * 30000);
+
+        return () => clearInterval(alertInterval);
+      }, [activeAlert, isRunning]);
+
+      useEffect(() => {
+        if (!activeAlert || !alertStartTime) return;
+
+        const checkInterval = setInterval(() => {
+          const elapsed = Date.now() - alertStartTime;
+          if (elapsed > 300000) {
+            setMissedAlerts(prev => prev + 1);
+            setShowFeedback({ type: 'miss', message: 'Missed alert! Parameter returned to normal.' });
+            setActiveAlert(null);
+            setAlertStartTime(null);
+            setTimeout(() => setShowFeedback(null), 3000);
+          }
+        }, 1000);
+
+        return () => clearInterval(checkInterval);
+      }, [activeAlert, alertStartTime]);
+
+      useEffect(() => {
+        if (!isRunning) return;
+
+        const interval = setInterval(() => {
+          setTime(new Date());
+          const now = Date.now();
+
+          if (now - lastHrUpdate >= 60000) {
+            setLastHrUpdate(now);
+
+            if (activeAlert === 'lowHR') {
+              setHr(Math.max(55, Math.min(65, 60 + (Math.random() - 0.5) * 8)));
+            } else {
+              setHr(Math.max(85, Math.min(105, 95 + (Math.random() - 0.5) * 12)));
+            }
+          }
+
+          if (now - lastSpo2Update >= 5000) {
+            setLastSpo2Update(now);
+
+            if (activeAlert === 'lowSpO2') {
+              setSpo2(Math.max(88, Math.min(92, 90 + (Math.random() - 0.5) * 3)));
+            } else {
+              setSpo2(Math.max(96, Math.min(99, 97 + (Math.random() - 0.5) * 2)));
+            }
+          }
+
+          if (now - lastEtco2Update >= 5000) {
+            setLastEtco2Update(now);
+
+            if (activeAlert === 'lowEtCO2') {
+              setEtco2(Math.max(24, Math.min(30, 27 + (Math.random() - 0.5) * 4)));
+            } else {
+              setEtco2(Math.max(35, Math.min(42, 38 + (Math.random() - 0.5) * 4)));
+            }
+          }
+
+          if (now - lastBpUpdate >= 180000) {
+            setLastBpUpdate(now);
+
+            if (activeAlert === 'lowBP') {
+              setBpSys(Math.max(70, Math.min(85, 75 + (Math.random() - 0.5) * 10)));
+              setBpDia(Math.max(45, Math.min(55, 50 + (Math.random() - 0.5) * 8)));
+              setBpMean(Math.max(55, Math.min(65, 60 + (Math.random() - 0.5) * 8)));
+            } else {
+              setBpSys(Math.max(110, Math.min(130, 120 + (Math.random() - 0.5) * 15)));
+              setBpDia(Math.max(70, Math.min(80, 75 + (Math.random() - 0.5) * 8)));
+              setBpMean(Math.max(85, Math.min(95, 90 + (Math.random() - 0.5) * 8)));
+            }
+          }
+
+          if (now - lastTempUpdate >= 60000) {
+            setLastTempUpdate(now);
+
+            if (activeAlert === 'lowTemp') {
+              setTemp(Math.max(35.5, Math.min(36.2, 35.8 + (Math.random() - 0.5) * 0.5)));
+            } else {
+              setTemp(Math.max(37.5, Math.min(38.2, 37.8 + (Math.random() - 0.5) * 0.4)));
+            }
+          }
+
+          if (now - lastRrUpdate >= 30000) {
+            setLastRrUpdate(now);
+            setRr(Math.max(12, Math.min(16, 14 + (Math.random() - 0.5) * 3)));
+          }
+        }, 1000);
+
+        return () => clearInterval(interval);
+      }, [isRunning, activeAlert, lastBpUpdate, lastHrUpdate, lastSpo2Update, lastEtco2Update, lastTempUpdate, lastRrUpdate]);
+
+      const handleParameterClick = (param) => {
+        if (activeAlert === param) {
+          setScore(prev => prev + 1);
+          setShowFeedback({ type: 'success', message: 'Correct! Alert detected in time!' });
+          setActiveAlert(null);
+          setAlertStartTime(null);
+          setTimeout(() => setShowFeedback(null), 3000);
+        }
+      };
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        const drawWaveform = () => {
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, width, height);
+
+          ctx.strokeStyle = '#00ff00';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let i = 0; i < width; i++) {
+            const t = (Date.now() / 10 + i) % 200;
+            let y = 50;
+            if (t < 10) y = 50 - (t / 10) * 30;
+            else if (t < 20) y = 20 + ((t - 10) / 10) * 60;
+            else if (t < 30) y = 80 - ((t - 20) / 10) * 10;
+            else if (t < 50) y = 70 - ((t - 30) / 20) * 20;
+            y += Math.sin(i * 0.1) * 2;
+            if (i === 0) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
+          }
+          ctx.stroke();
+
+          ctx.strokeStyle = '#ff4444';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let i = 0; i < width; i++) {
+            const t = (Date.now() / 12 + i) % 250;
+            const y = 150 + Math.sin(t * 0.025) * 25;
+            if (i === 0) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
+          }
+          ctx.stroke();
+
+          ctx.strokeStyle = '#00aaff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let i = 0; i < width; i++) {
+            const t = (Date.now() / 15 + i) % 300;
+            let y = 250;
+            if (t < 50) y = 250 - (t / 50) * 40;
+            else if (t < 200) y = 210;
+            else if (t < 230) y = 210 + ((t - 200) / 30) * 40;
+            if (i === 0) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
+          }
+          ctx.stroke();
+
+          if (isRunning) {
+            requestAnimationFrame(drawWaveform);
+          }
+        };
+
+        drawWaveform();
+      }, [isRunning]);
+
+      const reset = () => {
+        setScore(0);
+        setMissedAlerts(0);
+        setActiveAlert(null);
+        setAlertStartTime(null);
+        setShowFeedback(null);
+      };
+
+      return React.createElement('div', { className: 'w-full h-screen bg-gray-900 flex flex-col' },
+        React.createElement('div', { className: 'bg-gray-800 px-6 py-3 flex justify-between items-center border-b border-gray-700' },
+          React.createElement('div', { className: 'flex items-center gap-4' },
+            React.createElement('h1', { className: 'text-2xl font-bold text-blue-400' }, 'SurgiVet Monitor'),
+            React.createElement('span', { className: 'text-gray-400 text-sm' }, time.toLocaleTimeString()),
+            React.createElement('span', { className: 'text-yellow-400 text-sm font-semibold' }, 'CAT')
+          ),
+          React.createElement('div', { className: 'flex gap-4 items-center' },
+            React.createElement('div', { className: 'text-white text-sm' },
+              React.createElement('span', { className: 'text-green-400 font-bold' }, 'Detected: ', score),
+              React.createElement('span', { className: 'mx-2' }, '|'),
+              React.createElement('span', { className: 'text-red-400 font-bold' }, 'Missed: ', missedAlerts)
+            ),
+            React.createElement('button', {
+              onClick: () => setIsRunning(!isRunning),
+              className: 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2'
+            }, isRunning ? 'Pause' : 'Resume'),
+            React.createElement('button', {
+              onClick: reset,
+              className: 'bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center gap-2'
+            }, 'Reset')
+          )
+        ),
+        showFeedback && React.createElement('div', {
+          className: `absolute top-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-10 ${
+            showFeedback.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          } text-white font-bold`
+        }, showFeedback.message),
+        React.createElement('div', { className: 'flex-1 flex' },
+          React.createElement('div', { className: 'flex-1 bg-black p-4' },
+            React.createElement('canvas', { ref: canvasRef, width: 800, height: 300, className: 'w-full h-full' })
+          ),
+          React.createElement('div', { className: 'w-80 bg-black border-l-2 border-gray-700 flex flex-col' },
+            React.createElement('div', {
+              onClick: () => handleParameterClick('lowHR'),
+              className: `flex-1 border-b-2 border-gray-700 p-4 cursor-pointer hover:bg-gray-900 ${
+                activeAlert === 'lowHR' ? 'animate-pulse' : ''
+              }`
+            },
+              React.createElement('div', { className: 'text-green-400 text-sm mb-1' }, 'HR SPO2'),
+              React.createElement('div', { className: 'text-green-400 text-6xl font-bold' }, Math.round(hr)),
+              React.createElement('div', { className: 'text-blue-400 text-xl mt-2' }, `SpO2: ${Math.round(spo2)}%`)
+            ),
+            React.createElement('div', {
+              onClick: () => handleParameterClick('lowEtCO2'),
+              className: `flex-1 border-b-2 border-gray-700 p-4 cursor-pointer hover:bg-gray-900 ${
+                activeAlert === 'lowEtCO2' ? 'animate-pulse' : ''
+              }`
+            },
+              React.createElement('div', { className: 'text-cyan-400 text-sm mb-1' }, 'ETCO2'),
+              React.createElement('div', { className: 'text-cyan-400 text-6xl font-bold' }, Math.round(etco2)),
+              React.createElement('div', { className: 'text-cyan-300 text-sm' }, 'mmHg')
+            ),
+            React.createElement('div', {
+              onClick: () => handleParameterClick('lowBP'),
+              className: `flex-1 border-b-2 border-gray-700 p-4 cursor-pointer hover:bg-gray-900 ${
+                activeAlert === 'lowBP' ? 'animate-pulse' : ''
+              }`
+            },
+              React.createElement('div', { className: 'text-red-400 text-sm mb-1' }, 'NIBP'),
+              React.createElement('div', { className: 'text-red-400 text-5xl font-bold' },
+                `${Math.round(bpSys)}/${Math.round(bpDia)}`
+              ),
+              React.createElement('div', { className: 'text-red-300 text-2xl' }, `(${Math.round(bpMean)})`)
+            ),
+            React.createElement('div', {
+              onClick: () => handleParameterClick('lowTemp'),
+              className: `flex-1 p-4 cursor-pointer hover:bg-gray-900 ${
+                activeAlert === 'lowTemp' ? 'animate-pulse' : ''
+              }`
+            },
+              React.createElement('div', { className: 'text-yellow-400 text-sm mb-1' }, 'TEMP'),
+              React.createElement('div', { className: 'text-yellow-400 text-5xl font-bold' }, `${temp.toFixed(1)}°C`),
+              React.createElement('div', { className: 'text-gray-400 text-xl mt-2' }, `RR: ${Math.round(rr)}`)
+            )
+          )
+        ),
+        React.createElement('div', { className: 'bg-gray-800 px-6 py-3 border-t border-gray-700' },
+          React.createElement('p', { className: 'text-gray-300 text-sm' },
+            'Monitor the parameters and click on any abnormal values within 5 minutes. Normal ranges: HR 80-140, SpO2 >95%, EtCO2 35-45 mmHg, BP 100-160/70-80, Temp 37-39°C'
+          )
+        )
+      );
+    };
+
+    ReactDOM.render(React.createElement(VetAnesthesiaMonitor), document.getElementById('root'));
+  </script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</body>
+</html>
